@@ -6,22 +6,17 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-# doom phrases to trigger the "YEAH" state
 TRIGGER_PHRASES = [
     "markets in turmoil",
     "market in turmoil",
     "turmoil in market"
 ]
 
-# bonus doom for flavor
-RELATED_PHRASES = [
-    "markets in chaos",
-    "dow plunges",
-    "recession fears",
-    "stocks tumble",
-    "sell-off",
-    "bloodbath",
-    "panic selling"
+DOOM_WORDS = [
+    "plunge", "panic", "fear", "tumble", "collapse", "chaos", "turmoil", "bloodbath",
+    "jitters", "uncertain", "recession", "crash", "sell-off", "volatility", "dive",
+    "free fall", "shock", "bears", "inflation", "yield", "downgrade", "slump",
+    "defaults", "bank run", "liquidity crisis"
 ]
 
 CNBC_URL = "https://www.cnbc.com"
@@ -30,6 +25,23 @@ HTML_FILE = Path("site/index.html")
 
 app = Flask(__name__)
 
+def score_headline(text):
+    score = 0
+    lower_text = text.lower()
+
+    for word in DOOM_WORDS:
+        if word in lower_text:
+            score += 1
+
+    if any(word in lower_text for word in ["now", "today"]):
+        score += 1
+    if len(text.split()) <= 6:
+        score += 1
+    if text.isupper():
+        score += 1
+
+    return score
+
 def scrape_cnbc():
     try:
         resp = requests.get(CNBC_URL, timeout=10)
@@ -37,40 +49,48 @@ def scrape_cnbc():
         articles = soup.find_all("a")
 
         matched_main = None
-        related_matches = []
+        ranked_headlines = []
 
         for a in articles:
-            title = a.get_text(strip=True).lower()
+            title = a.get_text(strip=True)
+            if not title or len(title) < 5:
+                continue
+
+            title_lower = title.lower()
             href = a.get("href", "#")
 
-            if any(p in title for p in TRIGGER_PHRASES) and not matched_main:
+            if any(p in title_lower for p in TRIGGER_PHRASES) and not matched_main:
                 matched_main = {
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                     "url": href
                 }
 
-            elif any(p in title for p in RELATED_PHRASES):
-                related_matches.append({
-                    "title": a.get_text(strip=True),
-                    "url": href
+            score = score_headline(title)
+            if score > 0:
+                ranked_headlines.append({
+                    "title": title,
+                    "url": href,
+                    "score": score
                 })
+
+        ranked_headlines.sort(key=lambda x: x["score"], reverse=True)
+        top_5 = ranked_headlines[:5]
 
         if matched_main:
             DATA_FILE.write_text(json.dumps(matched_main))
-            update_html(found=True, timestamp=matched_main["timestamp"], url=matched_main["url"], related=related_matches)
+            update_html(found=True, timestamp=matched_main["timestamp"], url=matched_main["url"], panic_headlines=top_5)
         else:
-            # fallback to known panic event
             update_html(
                 found=False,
                 timestamp="February 24, 2020",
                 url="https://www.cnbc.com/2020/02/24/stock-market-today-live.html",
-                related=related_matches
+                panic_headlines=top_5
             )
 
     except Exception as e:
         print("scrape error:", e)
 
-def update_html(found, timestamp, url=None, related=[]):
+def update_html(found, timestamp, url=None, panic_headlines=[]):
     if found:
         answer = f"<span style='color:darkred;font-weight:bold;'>YEAH</span>, it happened. CNBC posted it on {timestamp}."
         proof = f"<a href='{url}' target='_blank'>here's the link</a>"
@@ -78,12 +98,12 @@ def update_html(found, timestamp, url=None, related=[]):
         answer = f"<strong>No</strong>, CNBC last mentioned it on {timestamp}."
         proof = f"<a href='{url}' target='_blank'>{url}</a>"
 
-    related_html = ""
-    if related:
-        related_html = "<h2>Related Panic Headlines</h2><ul>"
-        for match in related:
-            related_html += f"<li><a href='{match['url']}' target='_blank'>{match['title']}</a></li>"
-        related_html += "</ul>"
+    panic_html = ""
+    if panic_headlines:
+        panic_html = "<h2>Top 5 Panic Headlines Right Now</h2><ul>"
+        for h in panic_headlines:
+            panic_html += f"<li><a href='{h['url']}' target='_blank'>{h['title']}</a> <small>(score: {h['score']})</small></li>"
+        panic_html += "</ul>"
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -132,13 +152,17 @@ def update_html(found, timestamp, url=None, related=[]):
       a:hover {{
         text-decoration: underline;
       }}
+      small {{
+        color: #888;
+        font-size: 0.9em;
+      }}
     </style>
   </head>
   <body>
     <h1>Are Markets in Turmoil?</h1>
     <div class="answer">{answer}</div>
     <div class="proof">Here’s the proof: {proof}</div>
-    {related_html}
+    {panic_html}
   </body>
 </html>"""
     HTML_FILE.write_text(html)
