@@ -6,14 +6,12 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-# exact match phrases that trigger the "YEAH" state
 TRIGGER_PHRASES = [
     "markets in turmoil",
     "market in turmoil",
     "turmoil in market"
 ]
 
-# doom scoring keywords
 DOOM_WORDS = [
     "plunge", "panic", "fear", "tumble", "collapse", "chaos", "turmoil", "bloodbath",
     "jitters", "uncertain", "recession", "crash", "sell-off", "volatility", "dive",
@@ -46,14 +44,17 @@ def score_headline(text):
 
 def scrape_cnbc():
     try:
-        resp = requests.get(CNBC_URL, timeout=10)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15"
+        }
+        resp = requests.get(CNBC_URL, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, "html.parser")
         articles = soup.find_all("a")
 
         matched_main = None
         ranked_headlines = []
         now = datetime.utcnow().isoformat() + "Z"
-        latest_title = "N/A"
+        latest_title = None
 
         for a in articles:
             title = a.get_text(strip=True)
@@ -100,7 +101,7 @@ def scrape_cnbc():
                 url="https://www.cnbc.com/2020/02/24/stock-market-today-live.html",
                 panic_headlines=top_5,
                 last_scraped=now,
-                last_seen_title=latest_title
+                last_seen_title=latest_title or "N/A"
             )
 
     except Exception as e:
