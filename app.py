@@ -6,7 +6,12 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-PHRASE = "the"  # use "markets in turmoil" for prod
+PHRASES = [
+    "markets in turmoil",
+    "market in turmoil",
+    "turmoil in market"
+]
+
 CNBC_URL = "https://www.cnbc.com"
 DATA_FILE = Path("data.json")
 HTML_FILE = Path("site/index.html")
@@ -21,7 +26,7 @@ def scrape_cnbc():
 
         for a in articles:
             title = a.get_text(strip=True).lower()
-            if PHRASE in title:
+            if any(p in title for p in PHRASES):
                 url = a['href']
                 timestamp = datetime.utcnow().isoformat() + "Z"
                 DATA_FILE.write_text(json.dumps({"last_seen": timestamp, "last_url": url}))
@@ -40,18 +45,52 @@ def scrape_cnbc():
 
 def update_html(found, timestamp, url=None):
     if found:
-        msg = f"YEAH, it happened. CNBC posted it on {timestamp} — <a href='{url}'>here's the link</a>."
+        answer = f"YEAH, it happened. CNBC posted it on {timestamp}."
+        proof = f"<a href='{url}'>here's the link</a>"
     else:
-        msg = f"No, CNBC last mentioned it on {timestamp}. Here's the proof: <a href='{url}'>{url}</a>"
+        answer = f"No, CNBC last mentioned it on {timestamp}."
+        proof = f"<a href='{url}'>{url}</a>"
 
     html = f"""<!DOCTYPE html>
 <html>
-  <head><title>Are Markets in Turmoil?</title></head>
+  <head>
+    <title>Are Markets in Turmoil?</title>
+    <style>
+      body {{
+        font-family: sans-serif;
+        max-width: 600px;
+        margin: 4em auto;
+        padding: 1em;
+        line-height: 1.6;
+        color: #111;
+      }}
+      h1 {{
+        font-size: 2em;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 1.5em;
+      }}
+      .answer {{
+        font-size: 1.3em;
+        font-weight: bold;
+        margin-bottom: 1em;
+      }}
+      .proof {{
+        border-top: 1px solid #ccc;
+        padding-top: 1em;
+        font-size: 1em;
+        color: #333;
+      }}
+    </style>
+  </head>
   <body>
-    <h1>{msg}</h1>
+    <h1>Are Markets in Turmoil?</h1>
+    <div class="answer">{answer}</div>
+    <div class="proof">Here’s the proof: {proof}</div>
   </body>
 </html>"""
     HTML_FILE.write_text(html)
+
 
 @app.route('/')
 def home():
