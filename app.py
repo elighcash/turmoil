@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-PHRASE = "markets in turmoil"
+PHRASE = "Trump"
 CNBC_URL = "https://www.cnbc.com"
 DATA_FILE = Path("data.json")
 HTML_FILE = Path("site/index.html")
