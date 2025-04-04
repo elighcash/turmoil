@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-PHRASE = "Trump"
+PHRASE = "the"  # use "markets in turmoil" for prod
 CNBC_URL = "https://www.cnbc.com"
 DATA_FILE = Path("data.json")
 HTML_FILE = Path("site/index.html")
@@ -28,12 +28,12 @@ def scrape_cnbc():
                 update_html(found=True, timestamp=timestamp, url=url)
                 return
 
-        # not found, use last known
-        if DATA_FILE.exists():
-            data = json.loads(DATA_FILE.read_text())
-            update_html(found=False, timestamp=data["last_seen"])
-        else:
-            update_html(found=False, timestamp="never")
+        # not found — use fallback
+        update_html(
+            found=False,
+            timestamp="February 24, 2020",
+            url="https://www.cnbc.com/2020/02/24/stock-market-today-live.html"
+        )
 
     except Exception as e:
         print("scrape error:", e)
@@ -42,7 +42,7 @@ def update_html(found, timestamp, url=None):
     if found:
         msg = f"YEAH, it happened. CNBC posted it on {timestamp} — <a href='{url}'>here's the link</a>."
     else:
-        msg = f"No, CNBC last mentioned it on {timestamp}."
+        msg = f"No, CNBC last mentioned it on {timestamp}. Here's the proof: <a href='{url}'>{url}</a>"
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -57,10 +57,10 @@ def update_html(found, timestamp, url=None):
 def home():
     return HTML_FILE.read_text()
 
-# run once at start
+# run once at boot
 scrape_cnbc()
 
-# start scheduler
+# run every 15 min
 sched = BackgroundScheduler()
 sched.add_job(scrape_cnbc, 'interval', minutes=15)
 sched.start()
