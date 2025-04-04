@@ -6,12 +6,14 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+# exact match phrases that trigger the "YEAH" state
 TRIGGER_PHRASES = [
     "markets in turmoil",
     "market in turmoil",
     "turmoil in market"
 ]
 
+# doom scoring keywords
 DOOM_WORDS = [
     "plunge", "panic", "fear", "tumble", "collapse", "chaos", "turmoil", "bloodbath",
     "jitters", "uncertain", "recession", "crash", "sell-off", "volatility", "dive",
@@ -50,6 +52,8 @@ def scrape_cnbc():
 
         matched_main = None
         ranked_headlines = []
+        now = datetime.utcnow().isoformat() + "Z"
+        latest_title = "N/A"
 
         for a in articles:
             title = a.get_text(strip=True)
@@ -59,9 +63,12 @@ def scrape_cnbc():
             title_lower = title.lower()
             href = a.get("href", "#")
 
+            if not latest_title:
+                latest_title = title
+
             if any(p in title_lower for p in TRIGGER_PHRASES) and not matched_main:
                 matched_main = {
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": now,
                     "url": href
                 }
 
@@ -78,19 +85,28 @@ def scrape_cnbc():
 
         if matched_main:
             DATA_FILE.write_text(json.dumps(matched_main))
-            update_html(found=True, timestamp=matched_main["timestamp"], url=matched_main["url"], panic_headlines=top_5)
+            update_html(
+                found=True,
+                timestamp=matched_main["timestamp"],
+                url=matched_main["url"],
+                panic_headlines=top_5,
+                last_scraped=now,
+                last_seen_title=latest_title
+            )
         else:
             update_html(
                 found=False,
                 timestamp="February 24, 2020",
                 url="https://www.cnbc.com/2020/02/24/stock-market-today-live.html",
-                panic_headlines=top_5
+                panic_headlines=top_5,
+                last_scraped=now,
+                last_seen_title=latest_title
             )
 
     except Exception as e:
         print("scrape error:", e)
 
-def update_html(found, timestamp, url=None, panic_headlines=[]):
+def update_html(found, timestamp, url=None, panic_headlines=[], last_scraped=None, last_seen_title=None):
     if found:
         answer = f"<span style='color:darkred;font-weight:bold;'>YEAH</span>, it happened. CNBC posted it on {timestamp}."
         proof = f"<a href='{url}' target='_blank'>here's the link</a>"
@@ -104,6 +120,14 @@ def update_html(found, timestamp, url=None, panic_headlines=[]):
         for h in panic_headlines:
             panic_html += f"<li><a href='{h['url']}' target='_blank'>{h['title']}</a> <small>(score: {h['score']})</small></li>"
         panic_html += "</ul>"
+
+    debug_html = f"""
+      <div class="footer">
+        <hr>
+        <p><strong>Last scrape:</strong> {last_scraped}</p>
+        <p><strong>Most recent headline:</strong> {last_seen_title}</p>
+      </div>
+    """
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -156,6 +180,12 @@ def update_html(found, timestamp, url=None, panic_headlines=[]):
         color: #888;
         font-size: 0.9em;
       }}
+      .footer {{
+        margin-top: 3em;
+        font-size: 0.9em;
+        color: #555;
+        text-align: center;
+      }}
     </style>
   </head>
   <body>
@@ -163,6 +193,7 @@ def update_html(found, timestamp, url=None, panic_headlines=[]):
     <div class="answer">{answer}</div>
     <div class="proof">Here’s the proof: {proof}</div>
     {panic_html}
+    {debug_html}
   </body>
 </html>"""
     HTML_FILE.write_text(html)
