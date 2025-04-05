@@ -19,6 +19,11 @@ DOOM_WORDS = [
     "defaults", "bank run", "liquidity crisis"
 ]
 
+BLACKLIST = [
+    "select", "all select", "markets", "skip navigation", "log in",
+    "sign up", "watchlist", "menu", "help", "privacy policy", "terms of service"
+]
+
 CNBC_URL = "https://www.cnbc.com"
 DATA_FILE = Path("data.json")
 HTML_FILE = Path("site/index.html")
@@ -59,13 +64,14 @@ def scrape_cnbc():
 
         for a in articles:
             title = a.get_text(strip=True)
-            if not title or len(title) < 5:
+            if not title or len(title.split()) < 3:
                 continue
-            if title.upper() in ["SELECT", "SKIP NAVIGATION", "LOG IN", "SIGN UP"]:
+            if title.lower() in seen_titles:
                 continue
-            if title in seen_titles:
+            seen_titles.add(title.lower())
+
+            if title.strip().lower() in BLACKLIST:
                 continue
-            seen_titles.add(title)
 
             href = a.get("href", "")
             if not href or href.strip() == "#":
@@ -211,10 +217,8 @@ def update_html(found, timestamp, url=None, panic_headlines=[], last_scraped=Non
 def home():
     return HTML_FILE.read_text()
 
-# run once at boot
 scrape_cnbc()
 
-# run every 15 min
 sched = BackgroundScheduler()
 sched.add_job(scrape_cnbc, 'interval', minutes=15)
 sched.start()
