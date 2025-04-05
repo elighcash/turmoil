@@ -53,6 +53,7 @@ def scrape_cnbc():
 
         matched_main = None
         ranked_headlines = []
+        seen_titles = set()
         now = datetime.utcnow().isoformat() + "Z"
         latest_title = None
 
@@ -60,13 +61,20 @@ def scrape_cnbc():
             title = a.get_text(strip=True)
             if not title or len(title) < 5:
                 continue
+            if title.upper() in ["SELECT", "SKIP NAVIGATION", "LOG IN", "SIGN UP"]:
+                continue
+            if title in seen_titles:
+                continue
+            seen_titles.add(title)
 
-            title_lower = title.lower()
-            href = a.get("href", "#")
+            href = a.get("href", "")
+            if not href or href.strip() == "#":
+                continue
 
             if not latest_title:
                 latest_title = title
 
+            title_lower = title.lower()
             if any(p in title_lower for p in TRIGGER_PHRASES) and not matched_main:
                 matched_main = {
                     "timestamp": now,
